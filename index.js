@@ -2,7 +2,7 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const axios = require('axios');
 const qs = require('querystring');
 
-let {excel,token,baseUrl} = require('./api');
+let {excel,token,baseUrl,info,options,periodAmount} = require('./api');
 
 const doc = new GoogleSpreadsheet(excel);
 let categories = [];
@@ -25,16 +25,12 @@ async function get(url, data={}){
 	return await fetch(url,data)
 	.then((result) => {
 		let Object=result.data;
-		if(!Object.success) console.error(Object.message[0].text);
+		if(!Object.success) throw Object.message[0].text;
 		if(Object.data instanceof Array && Object.data.length===1){
 			return Object.data[0];
 		}else{
 			return Object;
 		}
-	})
-	.catch((err) => {
-		console.error("HATA!!!\n",err);
-		return null;
 	});
 }
 
@@ -79,23 +75,34 @@ async function main() {
 	await doc.useServiceAccountAuth(require('./client_secret'));
 	await doc.loadInfo();
 	const sheet = doc.sheetsByIndex[0];
-	const brand = sheet.title;
-	const rows = await sheet.getRows();
-	console.log("Toplam satır sayısı:"+rows.length);
-	line();
+
 	categories = await fetchCategories();
+	for (let period=0;period<periodAmount;period++){
+		line();
+		//-----start------
+		console.log("Period",period);
+		console.time();
+		const rows = await sheet.getRows(options);
+		for(let i=0;i<options.limit;i++){
+			let lineNumber = await (period*options.limit+options.offset+i);
+			try{
+				let row = rows[i];
+				await setProductCategory(row,categories);
 
-	let name = rows[0]["AÇIKLAMA"];
-
-	let model = rows[0]["MODEL"];
-	let engine = rows[0]["MOTOR"].replace(/ \(.*\)/g,"");
-	let year = rows[0]["YIL"];
-	let power = rows[0]["KW / BG"];
-
-	let product = await get("product/get",{
-		"ProductName":name
-	});
-
+			}catch (e) {
+				await console.error("Hata:",e,"lineNumber:",lineNumber);
+			}
+		}
+		console.timeEnd();
+		//------end--------
+	}
+}
+async function setProductCategory(row,categories){
+	let brand = row["ARAÇ"];
+	let model = row["MODEL"];
+	let engine = row["MOTOR"];
+	let year = row["YIL"];
+	let power = row["KW / BG"];
 	let category = await findCategory(categories,[
 		brand,
 		model,
@@ -103,15 +110,10 @@ async function main() {
 		year,
 		power
 	]);
-	let CategoryCode="C"+category.category_id;
-
-	console.log("ProductCode: ",product.ProductCode);
-	console.log("CategoryCode: ",CategoryCode);
-	//console.log(category);
-	line();
+	let CategoryCode="C"+category["category_id"];
 	let res = await get("product/addCategory",{
-		data:JSON.stringify([ { "ProductCode": product.ProductCode, "CategoryCode": CategoryCode } ])
+		data:JSON.stringify([ { "ProductCode": row["ID"], "CategoryCode": CategoryCode } ])
 	});
-	if (res.success) console.log(res.message[0].text);
+	if (info && res.success) console.log(res.message[0].text);
 }
 main();
