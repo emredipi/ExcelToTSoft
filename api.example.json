@@ -1,5 +1,11 @@
 {
   "baseUrl": "",
   "token": "",
-  "excel": ""
+  "excel": "",
+  "info": false,
+  "options": {
+    "index": 0,
+    "last": 99999,
+    "limit": 1000
+  }
 }

@@ -2,7 +2,7 @@ const { GoogleSpreadsheet } = require('google-spreadsheet');
 const axios = require('axios');
 const qs = require('querystring');
 
-let {excel,token,baseUrl,info,options,periodAmount} = require('./api');
+let {excel,token,baseUrl,info,options} = require('./api');
 
 const doc = new GoogleSpreadsheet(excel);
 let categories = [];
@@ -68,6 +68,7 @@ async function findCategory(categories,array){
 			}
 		}
 	}
+	throw "Kategori bulunamadı.";
 }
 
 async function main() {
@@ -77,24 +78,21 @@ async function main() {
 	const sheet = doc.sheetsByIndex[0];
 
 	categories = await fetchCategories();
-	for (let period=0;period<periodAmount;period++){
-		line();
-		//-----start------
-		console.log("Period",period);
-		console.time();
-		const rows = await sheet.getRows(options);
-		for(let i=0;i<options.limit;i++){
-			let lineNumber = await (period*options.limit+options.offset+i);
+	let { index, limit, last } = options;
+	while(index<=last){
+		if ((index+limit)>last) limit = (last-index)%limit+1;
+		const rows = await sheet.getRows({
+			offset:index,
+			limit
+		});
+		for(let row of rows){
 			try{
-				let row = rows[i];
 				await setProductCategory(row,categories);
-
 			}catch (e) {
-				await console.error("Hata:",e,"lineNumber:",lineNumber);
+				await console.error("Hata:",e,"lineNumber:",index);
 			}
+			index++;
 		}
-		console.timeEnd();
-		//------end--------
 	}
 }
 async function setProductCategory(row,categories){
