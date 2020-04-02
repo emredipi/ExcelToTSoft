@@ -58,7 +58,7 @@ async function findCategory(categories,array){
 	for(let cat of categories){
 		//console.log(preLine(5-array.length)+cat.text);
 		//console.log(JSON.stringify(cat));
-		if(cat.text===word){
+		if(cat.text===word.trim()){
 			if(array.length===1){
 				//console.log(cat);
 				return cat;
@@ -71,30 +71,6 @@ async function findCategory(categories,array){
 	throw "Kategori bulunamadı.";
 }
 
-async function main() {
-	console.log("PROGRAM STARTED");
-	await doc.useServiceAccountAuth(require('./client_secret'));
-	await doc.loadInfo();
-	const sheet = doc.sheetsByIndex[0];
-
-	categories = await fetchCategories();
-	let { index, limit, last } = options;
-	while(index<=last){
-		if ((index+limit)>last) limit = (last-index)%limit+1;
-		const rows = await sheet.getRows({
-			offset:index,
-			limit
-		});
-		for(let row of rows){
-			try{
-				await setProductCategory(row,categories);
-			}catch (e) {
-				await console.error("Hata:",e,"lineNumber:",index);
-			}
-			index++;
-		}
-	}
-}
 async function setProductCategory(row,categories){
 	let brand = row["ARAÇ"];
 	let model = row["MODEL"];
@@ -113,5 +89,39 @@ async function setProductCategory(row,categories){
 		data:JSON.stringify([ { "ProductCode": row["ID"], "CategoryCode": CategoryCode } ])
 	});
 	if (info && res.success) console.log(res.message[0].text);
+}
+
+async function main() {
+	console.log("PROGRAM STARTED");
+	await doc.useServiceAccountAuth(require('./client_secret'));
+	await doc.loadInfo();
+	const sheet = doc.sheetsByIndex[0];
+	let counter = {"success":0, "error":0};
+
+	categories = await fetchCategories();
+	let { index, limit, last } = options;
+	index-=2; last-=2;
+	console.time();
+	while(index<=last){
+		if ((index+limit)>last) limit = (last-index)%limit+1;
+		const rows = await sheet.getRows({
+			offset:index,
+			limit
+		});
+		for(let row of rows){
+			try{
+				await setProductCategory(row,categories);
+				counter.success++;
+			}catch (e) {
+				await console.error("Hata:",e,"lineNumber:",index+2);
+				counter.error++;
+			}
+			index++;
+		}
+	}
+	console.log("Başarılı Sonuç: ",counter.success);
+	console.log("Hatalı Sonuç: ",counter.error);
+	console.log("Toplam: ",counter.success+counter.error);
+	console.timeEnd();
 }
 main();
