@@ -6,6 +6,7 @@ let {excel,token,baseUrl,info,options} = require('./api');
 
 const doc = new GoogleSpreadsheet(excel);
 let categories = [];
+let filters = [];
 
 function fetch(url, body, custom = false){
 	const requestBody = {
@@ -34,11 +35,11 @@ async function get(url, data={}){
 	});
 }
 
-async function fetchCategories() {
+async function readJSON(path) {
 	'use strict';
 	const fs = require('fs');
-	let rawData = fs.readFileSync('categories.json');
-	return JSON.parse(rawData).data;
+	let rawData = fs.readFileSync(path);
+	return JSON.parse(rawData);
 }
 
 function line(){
@@ -91,16 +92,44 @@ async function setProductCategory(row,categories){
 	if (info && res.success) console.log(res.message[0].text);
 }
 
+async function setFilter(row,filters){
+	let filter1 = row["FİLTRE 1"];
+	let filter2 = row["FİLTRE 2"];
+	for(let filter of filters){
+		if(filter.Name===filter1)
+			for (let childFilter of filter.Options){
+				if(childFilter.Name===filter2) {
+					let filter1ID = filter["Id"];
+					let filter2ID = childFilter["Id"];
+					await get('filter/setFilterValues',{
+						data:JSON.stringify( [
+							{
+							"ProductCode": row["ID"],
+							"GroupId": filter1ID,
+							"Type": "single",
+							"Value": filter2ID
+							}
+						])
+					});
+					return true;
+				}
+			}
+	}
+	throw `Filtre bulunamadı (${filter1} | ${filter2})`
+}
+
 async function main() {
+	categories = await readJSON('categories.json').data;
+	filters = await readJSON('filters.json');
 	console.log("PROGRAM STARTED");
 	await doc.useServiceAccountAuth(require('./client_secret'));
 	await doc.loadInfo();
 	const sheet = doc.sheetsByIndex[0];
 	let counter = {"success":0, "error":0};
 
-	categories = await fetchCategories();
 	let { index, limit, last } = options;
 	index-=2; last-=2;
+	let prevID = 0;
 	console.time();
 	while(index<=last){
 		if ((index+limit)>last) limit = (last-index)%limit+1;
@@ -110,6 +139,11 @@ async function main() {
 		});
 		for(let row of rows){
 			try{
+				if(prevID!==row["ID"]) {
+					await setFilter(row,filters);
+					prevID = row["ID"];
+					console.log("success",prevID);
+				}
 				await setProductCategory(row,categories);
 				counter.success++;
 			}catch (e) {
