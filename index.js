@@ -54,6 +54,19 @@ function preLine(number){
 	return text;
 }
 
+async function chunk(array, size) {
+	const chunked_arr = [];
+	for (let i = 0; i < array.length; i++) {
+		const last = chunked_arr[chunked_arr.length - 1];
+		if (!last || last.length === size) {
+			chunked_arr.push([array[i]]);
+		} else {
+			last.push(array[i]);
+		}
+	}
+	return chunked_arr;
+}
+
 async function findCategory(categories,array){
 	let word = array[0];
 	for(let cat of categories){
@@ -118,6 +131,37 @@ async function setFilter(row,filters){
 	throw `Filtre bulunamadı (${filter1} | ${filter2})`
 }
 
+let tableRows = [];
+async function setProductTable(){
+	if(tableRows.length===0) return false;
+	let keywords = ["ARAÇ","MODEL","TEKNİK TİP","MOTOR","YIL","MOTOR KODU","KW / BG"];
+	let ids = {};
+	let html = '<table class="api-detail-table"><thead><tr>';
+	html+=`${keywords.map(keyword=>`<td>${keyword}</td>`).join("")}</tr></thead>`;
+	for(let row of tableRows){
+		html+= `<tr>${keywords.map(keyword=>`<td>${row[keyword]}</td>`).join("")}</tr>`;
+		ids[row["ID"]]=true;
+	}
+	let code = tableRows[0]["MALZEME KODU"];
+	html+= '</table>';
+
+	tableRows = [];
+	let tables = Object.keys(ids).map(id=>({
+		"ProductCode": id,
+		"Details": html
+	}));
+	let chunked = await chunk(tables,10);
+	for(let table of chunked){
+		toplam += table.length;
+		let res = await get("product/updateProducts",{
+			data:JSON.stringify(
+				table
+			)
+		});
+	}
+	console.log("success",code)
+}
+
 async function main() {
 	categories = await readJSON('categories.json').data;
 	filters = await readJSON('filters.json');
@@ -130,6 +174,7 @@ async function main() {
 	let { index, limit, last } = options;
 	index-=2; last-=2;
 	let prevID = 0;
+	let prevCode="";
 	console.time();
 	while(index<=last){
 		if ((index+limit)>last) limit = (last-index)%limit+1;
@@ -142,8 +187,13 @@ async function main() {
 				if(prevID!==row["ID"]) {
 					await setFilter(row,filters);
 					prevID = row["ID"];
-					console.log("success",prevID);
+					console.log("success",row["ID"]);
 				}
+				if(prevCode!==row["MALZEME KODU"] || index===last){
+					await setProductTable();
+					prevCode = row["MALZEME KODU"];
+				}
+				tableRows.push(row);
 				await setProductCategory(row,categories);
 				counter.success++;
 			}catch (e) {
@@ -153,6 +203,7 @@ async function main() {
 			index++;
 		}
 	}
+	line();
 	console.log("Başarılı Sonuç: ",counter.success);
 	console.log("Hatalı Sonuç: ",counter.error);
 	console.log("Toplam: ",counter.success+counter.error);
