@@ -1,6 +1,8 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const axios = require('axios');
 const qs = require('querystring');
+'use strict';
+const fs = require('fs');
 
 let {excel,token,baseUrl,info,options} = require('./api');
 
@@ -36,8 +38,6 @@ async function get(url, data={}){
 }
 
 async function readJSON(path) {
-	'use strict';
-	const fs = require('fs');
 	let rawData = fs.readFileSync(path);
 	return JSON.parse(rawData);
 }
@@ -70,14 +70,11 @@ async function chunk(array, size) {
 async function findCategory(categories,array){
 	let word = array[0];
 	for(let cat of categories){
-		//console.log(preLine(5-array.length)+cat.text);
-		//console.log(JSON.stringify(cat));
 		if(cat.text===word.trim()){
 			if(array.length===1){
-				//console.log(cat);
 				return cat;
 			}else{
-				[, ...newArray] = array;
+				let [, ...newArray] = array;
 				return findCategory(cat.children,newArray);
 			}
 		}
@@ -85,7 +82,7 @@ async function findCategory(categories,array){
 	throw "Kategori bulunamadı.";
 }
 
-async function setProductCategory(row,categories){
+async function setProductCategory(row){
 	let brand = row["ARAÇ"];
 	let model = row["MODEL"];
 	let engine = row["MOTOR"];
@@ -142,7 +139,7 @@ async function setProductTable(){
 		html+= `<tr>${keywords.map(keyword=>`<td>${row[keyword]}</td>`).join("")}</tr>`;
 		ids[row["ID"]]=true;
 	}
-	let code = tableRows[0]["MALZEME KODU"];
+	//let code = tableRows[0]["MALZEME KODU"];
 	html+= '</table>';
 
 	tableRows = [];
@@ -151,6 +148,7 @@ async function setProductTable(){
 		"Details": html
 	}));
 	let chunked = await chunk(tables,10);
+	let toplam = 0;
 	for(let table of chunked){
 		toplam += table.length;
 		let res = await get("product/updateProducts",{
@@ -159,45 +157,78 @@ async function setProductTable(){
 			)
 		});
 	}
-	console.log("success",code)
+	//console.log("success",code)
 }
 
+async function fetchCategories(){
+	let categoriesObject = await get("category/getCategoryTree").catch(e=>{
+		console.error(e);
+		process.exit(1);
+	});
+	let categories = await categoriesObject.data.filter(category=>category["is_active"]==="1");
+	await fs.writeFile('categories.json', JSON.stringify(categories), (err) => {
+		if (err) throw err;
+	});
+	console.log('Kategoriler İndirildi');
+	return categories;
+}
+let errorLines = [];
 async function main() {
-	categories = await readJSON('categories.json').data;
+	console.log("Program Başladı");
+	if(options.debugMode){
+		errorLines = fs.readFileSync('./log.txt').toString().match(/(?!lineNumber: )\d+/g).map(line=>Number(line));
+	}
+	categories = (options.fetchCategories)?await fetchCategories():await readJSON('categories.json');
 	filters = await readJSON('filters.json');
-	console.log("PROGRAM STARTED");
 	await doc.useServiceAccountAuth(require('./client_secret'));
 	await doc.loadInfo();
 	const sheet = doc.sheetsByIndex[0];
 	let counter = {"success":0, "error":0};
 
-	let { index, limit, last } = options;
-	index-=2; last-=2;
+	let { index, limit, last } = options; index-=2; last-=2;
 	let prevID = 0;
 	let prevCode="";
 	console.time();
+	if(options.debugMode){
+		index=0;
+		last=errorLines.length-1;
+		fs.writeFileSync('log.txt',"");
+	}
 	while(index<=last){
 		if ((index+limit)>last) limit = (last-index)%limit+1;
-		const rows = await sheet.getRows({
-			offset:index,
+		const rows = await sheet.getRows(options.debugMode?{
+			offset: errorLines[index-2],
 			limit
+		} : {
+			offset:index,
+			limit:1
 		});
 		for(let row of rows){
 			try{
-				if(prevID!==row["ID"]) {
+				if(options.setFilters && prevID!==row["ID"]) {
 					await setFilter(row,filters);
 					prevID = row["ID"];
-					console.log("success",row["ID"]);
+					if(info) console.log("Filtre eklendi:",row["ID"]);
 				}
-				if(prevCode!==row["MALZEME KODU"] || index===last){
-					await setProductTable();
-					prevCode = row["MALZEME KODU"];
+				if(options.setTable){
+					if(prevCode!==row["MALZEME KODU"] || index===last){
+						await setProductTable();
+						prevCode = row["MALZEME KODU"];
+					}
+					tableRows.push(row);
+					if (info) console.log("Tablo eklendi");
 				}
-				tableRows.push(row);
-				await setProductCategory(row,categories);
+				if (options.setCategories){
+					await setProductCategory(row);
+					if(info) console.log("Ürün kategorisi eklendi");
+				}
 				counter.success++;
 			}catch (e) {
-				await console.error("Hata:",e,"lineNumber:",index+2);
+				let errorMessage = "Hata: "+e+" lineNumber: "+(index+2);
+				fs.appendFile('log.txt', errorMessage+"\n", function (err) {
+					if (err) return console.log(err);
+				});
+				if (info) console.log(errorMessage);
 				counter.error++;
 			}
 			index++;
