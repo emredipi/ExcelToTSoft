@@ -67,19 +67,49 @@ async function chunk(array, size) {
 	return chunked_arr;
 }
 
-async function findCategory(categories,array){
+async function createCategories(children,parent=null){
+	let data = { //todo random id oluşturma function oluşturulacak, tüm id'leri tarayıp eşleşen varsa yeniden random çalışacak
+		"CategoryCode": "X"+Math.floor(Math.random()*(9999999-1000000)+1000000),
+		"CategoryName": children[0],
+		"IsActive": "1",
+	};
+	if(parent) data.ParentCode = parent.id;
+	let response = await get('category/setCategories',{
+		data: JSON.stringify([data])
+	});
+	if(response.success){
+		let id = response.message[0].id;
+		let catObject = {
+			id,
+			text:children[0],
+			children:[]
+		};
+		if(parent) parent.children.push(catObject);
+		else categories.push(catObject);
+		await writeCategories();
+		if(children.length===1)
+			return catObject;
+		else {
+			let [, ...newArray] = children;
+			return createCategories(newArray,catObject);
+		}
+	}
+}
+
+async function findCategory(array,parent=null){
 	let word = array[0];
-	for(let cat of categories){
+	let category = parent?parent:{"children":categories};
+	for(let cat of category.children){
 		if(cat.text===word.trim()){
 			if(array.length===1){
 				return cat;
 			}else{
 				let [, ...newArray] = array;
-				return findCategory(cat.children,newArray);
+				return findCategory(newArray,cat);
 			}
 		}
 	}
-	throw "Kategori bulunamadı.";
+	return await createCategories(array,parent);
 }
 
 async function setProductCategory(row){
@@ -87,17 +117,16 @@ async function setProductCategory(row){
 	let model = row["MODEL"];
 	let engine = row["MOTOR"];
 	let year = row["YIL"];
-	let power = row["KW / BG"];
-	let category = await findCategory(categories,[
+	let power = `${row["KW"]} KW / ${row["HP"]} BG`;
+	let category = await findCategory([
 		brand,
 		model,
 		engine,
 		year,
 		power
 	]);
-	let CategoryCode="C"+category["category_id"];
 	let res = await get("product/addCategory",{
-		data:JSON.stringify([ { "ProductCode": row["ID"], "CategoryCode": CategoryCode } ])
+		data:JSON.stringify([ { "ProductCode": row["ID"], "CategoryCode": category.id } ])
 	});
 	if (info && res.success) console.log(res.message[0].text);
 }
@@ -135,11 +164,11 @@ async function setProductTable(){
 	let ids = {};
 	let html = '<table class="api-detail-table"><thead><tr>';
 	html+=`${keywords.map(keyword=>`<td>${keyword}</td>`).join("")}</tr></thead>`;
+	//todo KW / BG ayrı kolonlardan çekilecek
 	for(let row of tableRows){
 		html+= `<tr>${keywords.map(keyword=>`<td>${row[keyword]}</td>`).join("")}</tr>`;
 		ids[row["ID"]]=true;
 	}
-	//let code = tableRows[0]["MALZEME KODU"];
 	html+= '</table>';
 
 	tableRows = [];
@@ -157,7 +186,12 @@ async function setProductTable(){
 			)
 		});
 	}
-	//console.log("success",code)
+}
+
+async function writeCategories(){
+	await fs.writeFile('categories.json', JSON.stringify(categories), (err) => {
+		if (err) throw err;
+	});
 }
 
 async function fetchCategories(){
@@ -165,13 +199,12 @@ async function fetchCategories(){
 		console.error(e);
 		process.exit(1);
 	});
-	let categories = await categoriesObject.data.filter(category=>category["is_active"]==="1");
-	await fs.writeFile('categories.json', JSON.stringify(categories), (err) => {
-		if (err) throw err;
-	});
+	categories = await categoriesObject.data.filter(category=>category["is_active"]==="1");
 	console.log('Kategoriler İndirildi');
+	await writeCategories();
 	return categories;
 }
+
 let errorLines = [];
 async function main() {
 	console.log("Program Başladı");
