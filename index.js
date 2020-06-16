@@ -78,6 +78,7 @@ async function createCategories(children, parent = null) {
 		data: JSON.stringify([data])
 	});
 	if (response.success) {
+		if (info) console.log("Yeni kategori oluşturuldu:", children[0]);
 		let id = response.message[0].id;
 		let catObject = {
 			id,
@@ -195,6 +196,12 @@ async function writeCategories() {
 	});
 }
 
+async function writeLastLineNumber(number) {
+	await fs.writeFile('lastlinenumber.txt', number, (err) => {
+		if (err) throw err;
+	});
+}
+
 async function fetchCategories() {
 	let categoriesObject = await get("category/getCategoryTree").catch(e => {
 		console.error(e);
@@ -257,7 +264,7 @@ async function main() {
 				}
 				if (options.setCategories) {
 					await setProductCategory(row);
-					if (info) console.log("Ürün kategorisi eklendi");
+					if (info) console.log("Ürün kategorisi eklendi", "Satır: " + (index + 2));
 				}
 				counter.success++;
 			} catch (e) {
@@ -268,7 +275,7 @@ async function main() {
 				if (info) console.log(errorMessage);
 				counter.error++;
 			}
-			index++;
+			await writeLastLineNumber(index++);
 		}
 	}
 	line();
