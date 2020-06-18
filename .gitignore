@@ -2,3 +2,4 @@ api.json
 /node_modules
 categories.json
 log.txt
+/lastlinenumber.txt
