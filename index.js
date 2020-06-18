@@ -252,19 +252,22 @@ async function main() {
 				if (options.setFilters && prevID !== row["ID"]) {
 					await setFilter(row, filters);
 					prevID = row["ID"];
-					if (info) console.log("Filtre eklendi:", row["ID"]);
+					if (info) console.log("Filtre eklendi:", "Satır: " + (index + 2));
 				}
 				if (options.setTable) {
 					if (prevCode !== row["MALZEME KODU"] || index === last) {
+						let tableLength = tableRows.length;
 						await setProductTable();
 						prevCode = row["MALZEME KODU"];
+						if (info) console.log(tableLength + " tane tablo ekledi", "Satır: " + (index + 2));
 					}
 					tableRows.push(row);
-					if (info) console.log("Tablo eklendi");
 				}
 				if (options.setCategories) {
 					await setProductCategory(row);
-					if (info) console.log("Ürün kategorisi eklendi", "Satır: " + (index + 2));
+					if (info) {
+						console.log("Ürün kategorisi eklendi", "Satır: " + (index + 2));
+					}
 				}
 				counter.success++;
 			} catch (e) {
