@@ -242,10 +242,10 @@ async function main() {
 		if ((index + limit) > last) limit = (last - index) % limit + 1;
 		const rows = await sheet.getRows(options.debugMode ? {
 			offset: errorLines[index - 2],
-			limit
+			limit: 1
 		} : {
 			offset: index,
-			limit: 1
+			limit
 		});
 		for (let row of rows) {
 			try {
