@@ -196,6 +196,12 @@ async function writeCategories() {
 	});
 }
 
+async function writeFilters() {
+	await fs.writeFile('filters.json', JSON.stringify(filters), (err) => {
+		if (err) throw err;
+	});
+}
+
 async function writeLastLineNumber(number) {
 	await fs.writeFile('lastlinenumber.txt', number, (err) => {
 		if (err) throw err;
@@ -213,6 +219,17 @@ async function fetchCategories() {
 	return categories;
 }
 
+async function fetchFilters() {
+	let filtersObject = await get("filter/get", {FetchOptions: true}).catch(e => {
+		console.error(e);
+		process.exit(1);
+	});
+	filters = await filtersObject.data;
+	console.log('Filtreler İndirildi');
+	await writeFilters();
+	return filters;
+}
+
 let errorLines = [];
 
 async function main() {
@@ -221,7 +238,7 @@ async function main() {
 		errorLines = fs.readFileSync('./log.txt').toString().match(/(?!lineNumber: )\d+/g).map(line => Number(line));
 	}
 	categories = (options.fetchCategories) ? await fetchCategories() : await readJSON('categories.json');
-	filters = await readJSON('filters.json');
+	filters = (options.fetchFilters) ? await fetchFilters() : await readJSON('filters.json');
 	await doc.useApiKey(google_console_key);
 	await doc.loadInfo();
 	const sheet = doc.sheetsByIndex[0];
