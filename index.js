@@ -224,7 +224,7 @@ async function fetchFilters() {
 		console.error(e);
 		process.exit(1);
 	});
-	filters = await filtersObject.data;
+	filters = await filtersObject.data.filter(filter => filter.ListNo == 100);
 	console.log('Filtreler İndirildi');
 	await writeFilters();
 	return filters;
