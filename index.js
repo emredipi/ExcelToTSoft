@@ -101,7 +101,7 @@ async function findCategory(array, parent = null) {
 	let word = array[0];
 	let category = parent ? parent : {"children": categories};
 	for (let cat of category.children) {
-		if (cat.text === word.trim()) {
+		if (cat.text === word.trim().replace(/\s+/g, " ")) {
 			if (array.length === 1) {
 				return cat;
 			} else {
@@ -213,7 +213,11 @@ async function fetchCategories() {
 		console.error(e);
 		process.exit(1);
 	});
-	categories = await categoriesObject.data.filter(category => category["is_active"] === "1");
+	if (categoriesObject.hasOwnProperty("data") && categoriesObject.data instanceof Array) {
+		categories = await categoriesObject.data.filter(category => category["is_active"] === "1");
+	} else {
+		categories.push(categoriesObject);
+	}
 	console.log('Kategoriler İndirildi');
 	await writeCategories();
 	return categories;
