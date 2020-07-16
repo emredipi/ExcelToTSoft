@@ -98,10 +98,11 @@ async function createCategories(children, parent = null) {
 }
 
 async function findCategory(array, parent = null) {
+	array = array.map(cat => cat.trim().replace(/\s+/g, " "));
 	let word = array[0];
 	let category = parent ? parent : {"children": categories};
 	for (let cat of category.children) {
-		if (cat.text === word.trim().replace(/\s+/g, " ")) {
+		if (cat.text === word) {
 			if (array.length === 1) {
 				return cat;
 			} else {
