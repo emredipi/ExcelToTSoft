@@ -71,7 +71,8 @@ async function createCategories(children, parent = null) {
 	let data = { //todo random id oluşturma function oluşturulacak, tüm id'leri tarayıp eşleşen varsa yeniden random çalışacak
 		"CategoryCode": "X" + Math.floor(Math.random() * (9999999 - 1000000) + 1000000),
 		"CategoryName": children[0],
-		"IsActive": "1",
+		"IsActive": true,
+		"ShowCategory": true,
 	};
 	if (parent) data.ParentCode = parent.id;
 	let response = await get('category/setCategories', {
